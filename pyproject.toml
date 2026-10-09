@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "k8s-autonomous-remediator"
+version = "0.1.0"
+description = "Policy-driven autonomous remediation platform for Kubernetes workloads"
+authors = ["soumith avunoori"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<4.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
