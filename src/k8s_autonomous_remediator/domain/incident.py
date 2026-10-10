@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
@@ -25,3 +25,27 @@ class Incident:
     severity: IncidentSeverity
     status: IncidentStatus
     detected_at: datetime
+
+    def transition_to(self, new_status: IncidentStatus) -> "Incident":
+        allowed_transitions = {
+            IncidentStatus.DETECTED: {
+                IncidentStatus.INVESTIGATING,
+            },
+            IncidentStatus.INVESTIGATING: {
+                IncidentStatus.REMEDIATING,
+                IncidentStatus.ESCALATED,
+            },
+            IncidentStatus.REMEDIATING: {
+                IncidentStatus.RESOLVED,
+                IncidentStatus.ESCALATED,
+            },
+            IncidentStatus.RESOLVED: set(),
+            IncidentStatus.ESCALATED: set(),
+        }
+
+        if new_status not in allowed_transitions[self.status]:
+            raise ValueError(
+                f"Invalid incident transition: "
+                f"{self.status.value} -> {new_status.value}"
+            )
+        return replace(self, status=new_status)

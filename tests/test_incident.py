@@ -43,3 +43,97 @@ def test_incident_cannot_be_modified():
 
     with pytest.raises(FrozenInstanceError):
         incident.status = IncidentStatus.RESOLVED
+
+
+def test_incident_allows_valid_status_transition():
+    incident = Incident(
+        incident_id=uuid4(),
+        workload_name="payment-api",
+        namespace="production",
+        reason="HTTP 500 error rate exceeded 15%",
+        severity=IncidentSeverity.HIGH,
+        status=IncidentStatus.DETECTED,
+        detected_at=datetime.now(timezone.utc),
+    )
+
+    updated_incident = incident.transition_to(
+        IncidentStatus.INVESTIGATING
+    )
+
+    assert updated_incident.status == IncidentStatus.INVESTIGATING
+
+    assert incident.status == IncidentStatus.DETECTED
+
+    assert updated_incident.incident_id == incident.incident_id
+
+def test_incident_rejects_invalid_status_transition():
+    incident = Incident(
+        incident_id=uuid4(),
+        workload_name="payment-api",
+        namespace="production",
+        reason="HTTP 500 error rate exceeded 15%",
+        severity=IncidentSeverity.HIGH,
+        status=IncidentStatus.DETECTED,
+        detected_at=datetime.now(timezone.utc),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Invalid incident transition",
+    ):
+        incident.transition_to(IncidentStatus.RESOLVED)
+
+@pytest.mark.parametrize(
+    "current_status, new_status",
+    [
+        (IncidentStatus.DETECTED, IncidentStatus.INVESTIGATING),
+        (IncidentStatus.INVESTIGATING, IncidentStatus.REMEDIATING),
+        (IncidentStatus.INVESTIGATING, IncidentStatus.ESCALATED),
+        (IncidentStatus.REMEDIATING, IncidentStatus.RESOLVED),
+        (IncidentStatus.REMEDIATING, IncidentStatus.ESCALATED),
+    ],
+)
+
+def test_incident_allows_supported_lifecycle_transitions(
+    current_status,
+    new_status,
+):
+    incident = Incident(
+        incident_id=uuid4(),
+        workload_name="payment-api",
+        namespace="production",
+        reason="HTTP 500 error rate exceeded threshold",
+        severity=IncidentSeverity.HIGH,
+        status=current_status,
+        detected_at=datetime.now(timezone.utc),
+    )
+
+    updated_incident = incident.transition_to(new_status)
+    
+    assert updated_incident.status ==new_status
+    assert incident.status == current_status
+    assert updated_incident.incident_id == incident.incident_id
+
+@pytest.mark.parametrize(
+    "terminal_status",
+    [
+        IncidentStatus.RESOLVED,
+        IncidentStatus.ESCALATED,
+    ]
+)
+
+def test_incident_rejects_transitions_from_terminal_stated(
+    terminal_status,
+):
+    incident =Incident(
+        incident_id=uuid4(),
+        workload_name="payment-api",
+        namespace="production",
+        reason="HTTP 500 error rate exceeded threshold",
+        severity=IncidentSeverity.HIGH,
+        status=terminal_status,
+        detected_at=datetime.now(timezone.utc),
+    )
+
+    with pytest.raises(ValueError, match="Invalid incident transition"):
+        incident.transition_to(IncidentStatus.INVESTIGATING)
