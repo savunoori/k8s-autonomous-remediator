@@ -5,6 +5,7 @@ description = "Policy-driven autonomous remediation platform for Kubernetes work
 authors = ["soumith avunoori"]
 license = "MIT"
 readme = "README.md"
+packages = [{ include = "k8s_autonomous_remediator", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"

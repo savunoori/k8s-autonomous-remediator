@@ -1,16 +1,16 @@
-from dataclass import FrozenInstanceError
+from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
 from uuid import uuid4
 import pytest
 
-from k8s_automnatous_remediator.domain.incident import (
+from k8s_autonomous_remediator.domain.incident import (
     Incident,
     IncidentSeverity,
     IncidentStatus,         
 )
 
 def test_incident_creation():
-    incident_id = uuid()
+    incident_id = uuid4()
     detected_at = datetime.now(timezone.utc)
 
     incident = Incident(
