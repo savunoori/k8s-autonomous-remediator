@@ -77,3 +77,49 @@ def test_policy_supports_custom_protected_namespaces():
         namespace="finance-critical",
     )
     assert result is False
+
+@pytest.mark.parametrize(
+    "namespace",
+    [
+        "kube-system",
+        "kube-public",
+        "kube-node-lease",
+    ],
+)
+def test_mandatory_namespaces_remain_protected(
+    namespace,
+):
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+        protected_namespaces=frozenset(),
+    )
+
+    result=policy.allows(
+        action_type=RemediationActionType.RESTART_ROLLOUT,
+        namespace=namespace,
+    )
+
+    assert result is False
+
+def test_custom_namespaces_preserve_mandatory_protection():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.ROLLBACK_DEPLOYMENT,
+        }),
+        protected_namespaces=frozenset({
+            "finance-critical",
+        }),
+    )
+
+    for namespace in (
+        "finance-critical",
+        "kube-system",
+        "kube-public",
+        "kube-node-lease",
+    ):
+        assert policy.allows(
+            action_type=RemediationActionType.ROLLBACK_DEPLOYMENT,
+            namespace=namespace,
+        ) is False
