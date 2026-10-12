@@ -41,3 +41,62 @@ def test_remediation_acton_caanot_be_modifeied():
 
     with pytest.raises(FrozenInstanceError):
         action.status = RemediationActionStatus.APPROVED
+
+@pytest.mark.parametrize(
+    "current_status, next_status",
+    [
+        (RemediationActionStatus.PENDING, RemediationActionStatus.APPROVED),
+        (RemediationActionStatus.PENDING, RemediationActionStatus.REJECTED),
+        (RemediationActionStatus.APPROVED, RemediationActionStatus.EXECUTING),
+        (RemediationActionStatus.EXECUTING, RemediationActionStatus.SUCCEEDED),
+        (RemediationActionStatus.EXECUTING, RemediationActionStatus.FAILED),
+    ],
+)
+def test_remediation_allows_valid_status_transitions(
+    current_status,
+    next_status,
+):
+    action = RemediationAction(
+        action_id=uuid4(),
+        incident_id=uuid4(),
+        action_type=RemediationActionType.ROLLBACK_DEPLOYMENT,
+        workload_name="payment-api",
+        namespace="production",
+        status=current_status,
+    )
+
+    updated_action = action.transition_to(next_status)
+
+    assert updated_action.status == next_status
+    assert action.status == current_status
+    assert updated_action.action_id == action.action_id
+    assert updated_action.incident_id == action.incident_id
+
+@pytest.mark.parametrize(
+    "current_status, next_status",
+    [
+        (RemediationActionStatus.PENDING, RemediationActionStatus.EXECUTING),
+        (RemediationActionStatus.APPROVED, RemediationActionStatus.SUCCEEDED),
+        (RemediationActionStatus.REJECTED, RemediationActionStatus.EXECUTING),
+        (RemediationActionStatus.SUCCEEDED, RemediationActionStatus.EXECUTING),
+        (RemediationActionStatus.FAILED, RemediationActionStatus.APPROVED),
+    ],
+)
+def test_remediation_rejects_invalid_status_transitions(
+    current_status,
+    next_status,
+):
+    action =RemediationAction(
+        action_id=uuid4(),
+        incident_id=uuid4(),
+        action_type=RemediationActionType.ROLLBACK_DEPLOYMENT,
+        workload_name="payment-api",
+        namespace="production",
+        status=current_status,
+   )
+
+    with pytest.raises(
+        ValueError,
+        match ="Invalid remediation action transition",
+    ):
+        action.transition_to(next_status)
