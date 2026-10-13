@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import ClassVar
+from datetime import datetime, timedelta
 
 from k8s_autonomous_remediator.domain.remediation import (
     RemediationActionType,
@@ -17,6 +18,9 @@ class RemediationPolicy:
     protected_namespaces: frozenset[str] = frozenset()
     max_remediation_attempts: int = 3
     cooldown_seconds: int = 300
+    approval_required_actions: frozenset[RemediationActionType] = frozenset({
+        RemediationActionType.ROLLBACK_DEPLOYMENT,
+    })
 
     def __post_init__(self) -> None:
         if (
@@ -58,3 +62,33 @@ class RemediationPolicy:
                 "attempts_made must be a non-negative integer"
             )
         return attempts_made < self.max_remediation_attempts
+
+    def allows_cooldown(
+        self,
+        last_attempt_at: datetime | None,
+        current_time: datetime,
+    ) -> bool:
+        if current_time.tzinfo is None or current_time.utcoffset() is None:
+            raise ValueError("current_time must be timezone-aware")
+
+        if last_attempt_at is None:
+            return True
+        if (
+            last_attempt_at.tzinfo is None 
+            or last_attempt_at.utcoffset() is None
+        ):
+            raise ValueError("last_attempt_at must be timezone-aware")
+        if last_attempt_at > current_time:
+            raise ValueError("last_attempt_at cannot be in the future")
+
+        next_allowed_time = last_attempt_at + timedelta(
+            seconds=self.cooldown_seconds
+        )
+
+        return current_time >= next_allowed_time
+
+    def requires_approval(
+        self,
+        action_type: RemediationActionType,
+    ) -> bool:
+        return action_type in self.approval_required_actions

@@ -2,6 +2,7 @@ import pytest
 
 from k8s_autonomous_remediator.domain.policy import RemediationPolicy
 from k8s_autonomous_remediator.domain.remediation import RemediationActionType
+from datetime import datetime, timedelta, timezone
 
 @pytest.mark.parametrize(
     "action_type, expected",
@@ -256,3 +257,175 @@ def test_policy_accepts_valid_cooldown(valid_cooldown):
     )
 
     assert policy.cooldown_seconds == valid_cooldown
+
+@pytest.mark.parametrize(
+    "minutes_elapsed, expected",
+    [
+        (2, False),
+        (4, False),
+        (5, True),
+        (10, True),
+    ],
+)
+def test_policy_enforces_cooldown(minutes_elapsed,expected):
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+        cooldown_seconds=300,
+    )
+
+    last_attempt = datetime(
+        2026, 10, 13, 10, 0,
+        tzinfo=timezone.utc,
+    )
+
+    current_time = last_attempt + timedelta(
+        minutes=minutes_elapsed,
+    )
+
+    result = policy.allows_cooldown(
+        last_attempt_at=last_attempt,
+        current_time=current_time
+    )
+    assert result is expected
+
+def test_policy_allows_cooldown_without_previous_attempts():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+    )
+
+    current_time = datetime(
+        2026, 10, 13, 10, 0,
+        tzinfo=timezone.utc,
+    )
+
+    result = policy.allows_cooldown(
+        last_attempt_at=None,
+        current_time=current_time,
+    )
+
+    assert result is True
+
+def test_policy_rejects_naive_current_time():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+    )
+
+    current_time = datetime(2026, 10, 13, 10, 0)
+
+    with pytest.raises(
+        ValueError,
+        match="current_time must be timezone-aware",
+    ):
+        policy.allows_cooldown(
+            last_attempt_at=None,
+            current_time=current_time,
+        )
+
+def test_policy_rejects_naive_previous_attempt():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+    )
+
+    last_attempt = datetime(2026, 10, 13, 10, 0)
+
+    current_time = datetime(
+        2026, 10, 13, 10, 5,
+        tzinfo=timezone.utc,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="last_attempt_at must be timezone-aware",
+    ):
+        policy.allows_cooldown(
+            last_attempt_at=last_attempt,
+            current_time=current_time,
+        )
+
+def test_policy_rejects_future_attempt_timestamp():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+    )
+
+    current_time = datetime(
+        2026, 10, 13, 10, 0,
+        tzinfo=timezone.utc,
+    )
+
+    last_attempt = current_time + timedelta(minutes=10)
+
+    with pytest.raises(
+        ValueError,
+        match="last_attempt_at cannot be in the future",
+    ):
+        policy.allows_cooldown(
+            last_attempt_at=last_attempt,
+            current_time=current_time,
+        )
+def test_policy_allows_zero_second_cooldown():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+        }),
+        cooldown_seconds=0,
+    )
+
+    current_time = datetime(
+        2026, 10, 13, 10, 0,
+        tzinfo=timezone.utc,
+    )
+
+    result = policy.allows_cooldown(
+        last_attempt_at=current_time,
+        current_time=current_time,
+    )
+
+    assert result is True
+
+@pytest.mark.parametrize(
+    "action_type, expected",
+    [
+        (RemediationActionType.RESTART_ROLLOUT, False),
+        (RemediationActionType.SCALE_DEPLOYMENT, False),
+        (RemediationActionType.ROLLBACK_DEPLOYMENT,True),
+    ],
+)
+def test_policy_default_approval_requirements(action_type, expected):
+    policy = RemediationPolicy(
+        allowed_actions=frozenset(RemediationActionType),
+    )
+
+    result = policy.requires_approval(action_type)
+    assert result is expected
+
+def test_policy_custom_approval_requirements():
+    policy = RemediationPolicy(
+        allowed_actions = frozenset(RemediationActionType),
+        approval_required_actions= frozenset({
+            RemediationActionType.RESTART_ROLLOUT,
+            RemediationActionType.SCALE_DEPLOYMENT,
+            RemediationActionType.ROLLBACK_DEPLOYMENT,
+        }),
+    )
+
+    for action_type in RemediationActionType:
+        assert policy.requires_approval(action_type) is True
+
+def test_policy_empty_approval_requirements():
+    policy = RemediationPolicy(
+        allowed_actions=frozenset(RemediationActionType),
+        approval_required_actions=frozenset(),
+    )
+
+    for action_type in RemediationActionType:
+        assert policy.requires_approval(action_type) is False
