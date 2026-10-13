@@ -16,6 +16,23 @@ class RemediationPolicy:
     allowed_actions: frozenset[RemediationActionType]
     protected_namespaces: frozenset[str] = frozenset()
     max_remediation_attempts: int = 3
+    cooldown_seconds: int = 300
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.max_remediation_attempts) is not int
+            or self.max_remediation_attempts < 1
+        ):
+            raise ValueError(
+                "max_remediation_attempts must be a positive integer"
+            )
+        if (
+            type(self.cooldown_seconds) is not int
+            or self.cooldown_seconds < 0
+        ):
+            raise ValueError(
+                "cooldown_seconds must be a non-negative integer"
+            )
 
     def allows(
         self,
@@ -34,3 +51,10 @@ class RemediationPolicy:
             return False
 
         return True
+
+    def allows_retry(self, attempts_made: int) -> bool:
+        if type(attempts_made)  is not int or attempts_made < 0:
+            raise ValueError(
+                "attempts_made must be a non-negative integer"
+            )
+        return attempts_made < self.max_remediation_attempts
