@@ -9,6 +9,7 @@ packages = [{ include = "k8s_autonomous_remediator", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
+kubernetes = "^37.0.1"
 
 
 [tool.poetry.group.dev.dependencies]
